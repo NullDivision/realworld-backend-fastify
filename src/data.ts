@@ -19,7 +19,7 @@ export interface Article {
   description: string | null;
   title: string;
   slug: string;
-  updated_at: string | null;
+  updated_at: string;
 }
 
 export interface ArticleTag {

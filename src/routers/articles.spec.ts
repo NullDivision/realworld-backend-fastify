@@ -5,7 +5,11 @@ import { router } from './articles';
 
 const server = fastify({ logger: true });
 
-server.decorate('authenticate', async () => {})
+server.decorate('authenticate', async (request: any) => {
+  if (!request.headers.authorization) {
+    throw new Error('Missing authorization header');
+  }
+})
 server.register(router);
 
 const testUser = {
@@ -19,6 +23,7 @@ describe('Articles router', () => {
   beforeEach(async () => {
     await getArticleDb().delete();
     await getTagsDb().delete();
+    await getUserDb().delete();
   });
 
   describe('[GET] /', () => {
@@ -37,7 +42,6 @@ describe('Articles router', () => {
 
       await getUserDb().delete();
       await getUserDb().insert([testUser]);
-      await getArticleDb().delete();
       await getArticleDb().insert([testArticle]);
       await getTagsDb().delete();
       await getTagsDb().insert([{
@@ -96,7 +100,7 @@ describe('Articles router', () => {
         updated_at: testUpdateDate
       };
 
-      await getArticleDb().delete();
+      await getUserDb().insert(testUser);
       await getArticleDb().insert([testValidArticle, testInvalidArticle]);
 
       const reply = await server.inject({
@@ -158,6 +162,60 @@ describe('Articles router', () => {
         title: testArticle.title,
         updatedAt: expect.any(String)
       }
+    });
+  });
+
+  it('[GET] /feed returns articles created by active user with the most recent first', async () => {
+    const testToken = 'test-token';
+    const testArticles = [
+      {
+        created_at: '2022-04-01T13:00:00.000Z',
+        created_by: testUser.user_id,
+        slug: 'first-article',
+        title: 'First article'
+      },
+      {
+        created_at: '2022-04-03T13:00:00.000Z',
+        created_by: testUser.user_id,
+        slug: 'second-article',
+        title: 'Second article'
+      }
+    ] as const;
+
+    await getUserDb().insert({ ...testUser, token: testToken });
+    await getArticleDb().insert(testArticles);
+
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testToken}` },
+      method: 'GET',
+      path: '/feed'
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+    expect(reply.json()).toEqual({
+      articles: [
+        {
+          author: testUser.username,
+          body: null,
+          createdAt: testArticles[1].created_at,
+          favorited: false,
+          favoritesCount: 0,
+          slug: testArticles[1].slug,
+          tagList: [],
+          title: testArticles[1].title
+        },
+        {
+          author: testUser.username,
+          body: null,
+          createdAt: testArticles[0].created_at,
+          favorited: false,
+          favoritesCount: 0,
+          slug: testArticles[0].slug,
+          tagList: [],
+          title: testArticles[0].title
+        }
+      ],
+      articlesCount: 2
     });
   });
 });
