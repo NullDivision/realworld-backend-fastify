@@ -2,7 +2,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
 import slugify from 'slugify';
-import { Article, User, getArticleDb, getTagsDb, getUserDb, getFavoritesDb } from '../data';
+import { Article, User, getArticleDb, getTagsDb, getUserDb, getFavoritesDb, Favorites, ArticleTag } from '../data';
 
 type ReplyArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>
@@ -66,6 +66,11 @@ const clampTitleToSlug = (title: string): string => {
 
 interface GetFeedGeneric {
   Reply: { articles: Array<ReplyArticle>; articlesCount: number };
+}
+
+interface GetArticleGeneric {
+  Params: { slug: string };
+  Reply: { article: ReplyArticle };
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
@@ -276,6 +281,67 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       });
     },
     onRequest: [instance.authenticate]
+  });
+
+  instance.get<GetArticleGeneric>('/:slug', async (request, reply) => {
+    let user: Pick<User, 'user_id'> | undefined;
+
+    if (request.headers.authorization) {
+      user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first();
+    }
+
+    const [
+      {
+        created_at,
+        updated_at,
+        username,
+        ...article
+      },
+      favorites,
+      tags
+    ]: [
+      & Pick<Article, 'body' | 'created_at' | 'description' | 'slug' | 'title' | 'updated_at'>
+      & Pick<User, 'username'>,
+      Favorites[],
+      ArticleTag[]
+    ] = await Promise.all([
+        getArticleDb()
+          .select(
+            'body',
+            'created_at',
+            'description',
+            'slug',
+            'title',
+            'updated_at',
+            'username'
+          )
+          .join('users', 'users.user_id', 'articles.created_by')
+          .where('slug', request.params.slug)
+          .first(),
+        getFavoritesDb().where('article_slug', request.params.slug),
+        getTagsDb().where('article_slug', request.params.slug)
+      ]);
+
+    if (!article) {
+      return reply.code(StatusCodes.NOT_FOUND).send();
+    }
+
+    await reply.send({
+      article: {
+        ...article,
+        author: username,
+        createdAt: new Date(created_at).toISOString(),
+        favorited: Boolean(
+          user && favorites.find(({ user_id }) => user_id === user?.user_id)
+        ),
+        favoritesCount: favorites.length,
+        tagList: tags.map(({ tag }) => tag),
+        updatedAt: new Date(updated_at).toISOString()
+      }
+    });
   });
 
   done();

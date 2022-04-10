@@ -202,7 +202,8 @@ describe('Articles router', () => {
           favoritesCount: 0,
           slug: testArticles[1].slug,
           tagList: [],
-          title: testArticles[1].title
+          title: testArticles[1].title,
+          updatedAt: expect.any(String)
         },
         {
           author: testUser.username,
@@ -212,10 +213,43 @@ describe('Articles router', () => {
           favoritesCount: 0,
           slug: testArticles[0].slug,
           tagList: [],
-          title: testArticles[0].title
+          title: testArticles[0].title,
+          updatedAt: expect.any(String)
         }
       ],
       articlesCount: 2
+    });
+  });
+
+  it('[GET] /{{slug}} returns a single article', async () => {
+    const testSlug = 'my-first-post';
+
+    await getUserDb().insert(testUser);
+    await getArticleDb().insert({
+      created_by: testUser.user_id,
+      slug: testSlug,
+      title: 'My first post'
+    });
+
+    const reply = await server.inject({
+      method: 'GET',
+      path: `/${testSlug}`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+    expect(reply.json()).toEqual({
+      article: {
+        author: testUser.username,
+        body: null,
+        createdAt: expect.any(String),
+        description: null,
+        favorited: false,
+        favoritesCount: 0,
+        slug: testSlug,
+        tagList: [],
+        title: 'My first post',
+        updatedAt: expect.any(String)
+      }
     });
   });
 });
