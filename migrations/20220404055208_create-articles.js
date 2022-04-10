@@ -5,7 +5,7 @@
 exports.up = function (knex) {
   return knex.schema
     .createTable('articles', (table) => {
-      table.text('title');
+      table.text('title').notNullable();
       table.text('slug').notNullable().unique();
       table.text('body');
       table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
@@ -15,7 +15,7 @@ exports.up = function (knex) {
         .index()
         .references('user_id')
         .inTable('users');
-      table.timestamp('updated_at');
+      table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
       table.text('description');
     })
     .createTable('articles_tags', table => {
@@ -43,4 +43,6 @@ exports.up = function (knex) {
  */
 exports.down = function (knex) {
   knex.schema.dropTableIfExists('article');
+  knex.schema.dropTableIfExists('articles_tags');
+  knex.schema.dropTableIfExists('favorites');
 };

@@ -1,12 +1,16 @@
 import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
-import { Article, User, getArticleDb, getTagsDb } from '../data';
+import { FromSchema } from 'json-schema-to-ts';
+import slugify from 'slugify';
+import { Article, User, getArticleDb, getTagsDb, getUserDb, getFavoritesDb } from '../data';
 
 type ReplyArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>
   & {
     author: User['username'];
     createdAt: Article['created_at'];
+    favorited: boolean;
+    favoritesCount: number;
     tagList: unknown[];
     updatedAt: Article['updated_at'];
   };
@@ -15,9 +19,62 @@ interface GetArticlesGeneric {
   Reply: { articles: ReplyArticle[], articlesCount: number };
 }
 
+const PostArticleSchema = {
+  properties: {
+    article: {
+      properties: {
+        body: { type: 'string' },
+        description: { type: 'string' },
+        tagList: { items: { type: 'string' }, type: 'array' },
+        title: { type: 'string' }
+      },
+      required: ['title'],
+      type: 'object'
+    }
+  },
+  required: ['article'],
+  type: 'object'
+} as const;
+
+interface PostArticlesGeneric {
+  Body: FromSchema<typeof PostArticleSchema>
+  Reply: { article: ReplyArticle | null };
+}
+
+const MaxSlugLength = 60;
+
+const clampTitleToSlug = (title: string): string => {
+  const words = title.trim().split(' ');
+  let result = '';
+
+  if (!words.length) throw new Error('Invalid title length');
+
+  for (const word of words) {
+    if (result.length === 0 && word.length > MaxSlugLength) {
+      throw new Error('Invalid word length');
+    }
+
+    if (`${result} ${word}`.length > MaxSlugLength) {
+      return result;
+    }
+
+    result = `${result} ${word}`;
+  }
+
+  return result;
+};
+
 export const router: FastifyPluginCallback = (instance, options, done) => {
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
+    let user: Pick<User, 'user_id'> | undefined;
+
+    if (request.headers.authorization) {
+      user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first();
+    }
 
     if (request.query.tag) {
       filteredTags = (
@@ -41,7 +98,6 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       .select(
         'body',
         'created_at',
-        'created_by',
         'description',
         'slug',
         'title',
@@ -50,31 +106,112 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       );
     const tags = await getTagsDb()
       .whereIn('article_slug', articles.map(({ slug }) => slug));
+    const favorites = await getFavoritesDb()
+      .whereIn('article_slug', articles.map(({ slug }) => slug));
 
-    void reply
+    await reply
       .code(StatusCodes.OK)
       .send({
         articles: articles.map((article) => {
           const {
             created_at,
-            created_by,
             updated_at,
             username,
             ...restArticle
           } = article;
+          const articleFavorites = favorites.filter((favorite) =>
+            favorite.article_slug === article.slug
+          );
 
           return {
             ...restArticle,
             author: username,
-            createdAt: created_at,
+            createdAt: new Date(created_at).toISOString(),
+            favorited: Boolean(
+              user &&
+              articleFavorites.find((favorite) =>
+                favorite.user_id === user?.user_id
+              )
+            ),
+            favoritesCount: articleFavorites.length,
             tagList: tags
               .filter(({ article_slug }) => article_slug === article.slug)
               .map(({ tag }) => tag),
-            updatedAt: updated_at
+            updatedAt: updated_at && new Date(updated_at).toISOString()
           };
         }),
         articlesCount: counter?.counter ?? 0
       });
+  });
+
+  instance.post<PostArticlesGeneric>('/', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first();
+
+      if (!user) {
+        return await reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
+      }
+
+      const slug = slugify(clampTitleToSlug(request.body.article.title), {
+        lower: true,
+        strict: true
+      });
+
+      await getArticleDb().insert({
+        body: request.body.article.body,
+        created_by: user.user_id,
+        description: request.body.article.description,
+        slug,
+        title: request.body.article.title
+      });
+
+      if (request.body.article.tagList) {
+        await getTagsDb().insert(
+          request.body.article.tagList.map((tag) => ({
+            article_slug: slug,
+            tag
+          }))
+        );
+      }
+
+      const {
+        created_at,
+        updated_at,
+        username,
+        ...article
+      }: Article & User = await getArticleDb()
+        .select(
+          'body',
+          'created_at',
+          'description',
+          'slug',
+          'title',
+          'updated_at',
+          'username'
+        )
+        .join('users', 'users.user_id', 'articles.created_by')
+        .where('slug', slug)
+        .first();
+
+      await reply
+        .code(StatusCodes.CREATED)
+        .send({
+          article: {
+            ...article,
+            author: username,
+            createdAt: new Date(created_at).toISOString(),
+            favorited: false,
+            favoritesCount: 0,
+            tagList: request.body.article.tagList ?? [],
+            updatedAt: updated_at && new Date(updated_at).toISOString()
+          }
+        });
+    },
+    onRequest: [instance.authenticate],
+    schema: { body: PostArticleSchema }
   });
 
   done();

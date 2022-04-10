@@ -10,10 +10,12 @@ import { router as articlesRouter } from './routers/articles';
 import { router as userRouter } from './routers/user';
 import { router as usersRouter } from './routers/users';
 
-export const server = fastify({ logger: true });
+export const server = fastify({
+  logger: process.env['NODE_ENV'] === 'development'
+});
 
 // It sucks every year, this is just the most recent
-server.register(jwt, { prefix: 'Token', secret: 'jssucks-2022' });
+server.register(jwt, { secret: 'jssucks-2022' });
 
 server.addHook('onRequest', (request, reply, done) => {
   if (request.headers.authorization?.startsWith('Token ')) {
@@ -27,7 +29,7 @@ server.decorate('authenticate', async (request: FastifyRequest, reply: FastifyRe
   try {
     await request.jwtVerify();
   } catch (error) {
-    void reply.code(StatusCodes.UNAUTHORIZED).send(error);
+    await reply.code(StatusCodes.UNAUTHORIZED).send(error);
   }
 });
 

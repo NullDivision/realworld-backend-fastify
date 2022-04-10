@@ -4,7 +4,7 @@
  */
 exports.up = function (knex) {
   return knex.schema.createTable('users', table => {
-    table.integer('user_id').unsigned().index();
+    table.increments('user_id').primary();
     table.text('bio', 255);
     table.text('email', 255).notNullable();
     table.text('image', 255);
