@@ -252,4 +252,39 @@ describe('Articles router', () => {
       }
     });
   });
+
+  it('[PUT] /{{slug}} updates and returns a single article', async () => {
+    const testToken = 'put-test-token';
+    const testBody = '...and then there was more';
+
+    await getUserDb().insert({ ...testUser, token: testToken });
+    await getArticleDb().insert({
+      created_by: testUser.user_id,
+      slug: 'my-first-post',
+      title: 'My first post'
+    });
+
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testToken}` },
+      method: 'PUT',
+      path: '/my-first-post',
+      payload: { article: { body: testBody } }
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+    expect(reply.json()).toEqual({
+      article: {
+        author: testUser.username,
+        body: testBody,
+        createdAt: expect.any(String),
+        description: null,
+        favorited: false,
+        favoritesCount: 0,
+        slug: 'my-first-post',
+        tagList: [],
+        title: 'My first post',
+        updatedAt: expect.any(String)
+      }
+    });
+  });
 });

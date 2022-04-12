@@ -73,6 +73,20 @@ interface GetArticleGeneric {
   Reply: { article: ReplyArticle };
 }
 
+const UpdateArticleSchema = {
+  properties: {
+    article: { properties: { body: { type: 'string' } }, type: 'object' }
+  },
+  required: ['article'],
+  type: 'object'
+} as const;
+
+interface UpdateArticleGeneric {
+  Body: FromSchema<typeof UpdateArticleSchema>
+  Params: { slug: string };
+  Reply: { article: ReplyArticle | null };
+}
+
 export const router: FastifyPluginCallback = (instance, options, done) => {
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
@@ -342,6 +356,65 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         updatedAt: new Date(updated_at).toISOString()
       }
     });
+  });
+
+  instance.put<UpdateArticleGeneric>('/:slug', {
+    handler: async (request, reply) => {
+      const { headers, params } = request;
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', headers.authorization?.replace('Bearer ', ''))
+        .first()
+
+      if (!user) {
+        return reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
+      }
+
+      // Update article
+      await getArticleDb()
+        .update({
+          body: request.body.article.body,
+          updated_at: new Date().toISOString()
+        })
+        .where({ created_by: user.user_id, slug: request.params.slug });
+
+      const article = await getArticleDb()
+        .select(
+          'body',
+          'created_at',
+          'description',
+          'slug',
+          'title',
+          'updated_at',
+          'username'
+        )
+        .join('users', 'users.user_id', 'articles.created_by')
+        .where('slug', params.slug)
+        .first();
+
+      if (!article) {
+        return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
+      }
+
+      const [favorites, tags] = await Promise.all([
+        getFavoritesDb().where('article_slug', params.slug),
+        getTagsDb().where('article_slug', params.slug)
+      ]);
+      const { created_at, updated_at, username, ...restArticle } = article;
+
+      await reply.code(StatusCodes.OK).send({
+        article: {
+          ...restArticle,
+          author: username,
+          createdAt: new Date(created_at).toISOString(),
+          favorited: Boolean(favorites.find(({ user_id }) => user_id === user.user_id)),
+          favoritesCount: favorites.length,
+          tagList: tags.map(({ tag }) => tag),
+          updatedAt: new Date(updated_at).toISOString()
+        }
+      });
+    },
+    onRequest: [instance.authenticate]
   });
 
   done();
