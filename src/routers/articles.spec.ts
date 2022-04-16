@@ -158,7 +158,7 @@ describe('Articles router', () => {
         favorited: false,
         favoritesCount: 0,
         slug: 'star-wars-a-new-hope',
-        tagList: testArticle.tagList,
+        tagList: expect.arrayContaining(testArticle.tagList),
         title: testArticle.title,
         updatedAt: expect.any(String)
       }

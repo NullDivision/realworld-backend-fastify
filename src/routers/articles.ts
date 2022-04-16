@@ -2,7 +2,15 @@ import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
 import slugify from 'slugify';
-import { Article, User, getArticleDb, getTagsDb, getUserDb, getFavoritesDb, Favorites, ArticleTag } from '../data';
+import {
+  Article,
+  User,
+  getArticleBySlug,
+  getArticleDb,
+  getFavoritesDb,
+  getTagsDb,
+  getUserDb
+} from '../data';
 
 type ReplyArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>
@@ -200,38 +208,13 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         );
       }
 
-      const {
-        created_at,
-        updated_at,
-        username,
-        ...article
-      }: Article & User = await getArticleDb()
-        .select(
-          'body',
-          'created_at',
-          'description',
-          'slug',
-          'title',
-          'updated_at',
-          'username'
-        )
-        .join('users', 'users.user_id', 'articles.created_by')
-        .where('slug', slug)
-        .first();
+      const article = await getArticleBySlug(slug, user.user_id);
+
+      if (!article) throw new Error('Could not refetch created ');
 
       await reply
         .code(StatusCodes.CREATED)
-        .send({
-          article: {
-            ...article,
-            author: username,
-            createdAt: new Date(created_at).toISOString(),
-            favorited: false,
-            favoritesCount: 0,
-            tagList: request.body.article.tagList ?? [],
-            updatedAt: updated_at && new Date(updated_at).toISOString()
-          }
-        });
+        .send({ article });
     },
     onRequest: [instance.authenticate],
     schema: { body: PostArticleSchema }
@@ -307,55 +290,13 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         .first();
     }
 
-    const [
-      {
-        created_at,
-        updated_at,
-        username,
-        ...article
-      },
-      favorites,
-      tags
-    ]: [
-      & Pick<Article, 'body' | 'created_at' | 'description' | 'slug' | 'title' | 'updated_at'>
-      & Pick<User, 'username'>,
-      Favorites[],
-      ArticleTag[]
-    ] = await Promise.all([
-        getArticleDb()
-          .select(
-            'body',
-            'created_at',
-            'description',
-            'slug',
-            'title',
-            'updated_at',
-            'username'
-          )
-          .join('users', 'users.user_id', 'articles.created_by')
-          .where('slug', request.params.slug)
-          .first(),
-        getFavoritesDb().where('article_slug', request.params.slug),
-        getTagsDb().where('article_slug', request.params.slug)
-      ]);
+    const article = await getArticleBySlug(request.params.slug, user?.user_id);
 
     if (!article) {
       return reply.code(StatusCodes.NOT_FOUND).send();
     }
 
-    await reply.send({
-      article: {
-        ...article,
-        author: username,
-        createdAt: new Date(created_at).toISOString(),
-        favorited: Boolean(
-          user && favorites.find(({ user_id }) => user_id === user?.user_id)
-        ),
-        favoritesCount: favorites.length,
-        tagList: tags.map(({ tag }) => tag),
-        updatedAt: new Date(updated_at).toISOString()
-      }
-    });
+    await reply.send({ article });
   });
 
   instance.put<UpdateArticleGeneric>('/:slug', {
@@ -376,43 +317,15 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
           body: request.body.article.body,
           updated_at: new Date().toISOString()
         })
-        .where({ created_by: user.user_id, slug: request.params.slug });
+        .where({ created_by: user.user_id, slug: params.slug });
 
-      const article = await getArticleDb()
-        .select(
-          'body',
-          'created_at',
-          'description',
-          'slug',
-          'title',
-          'updated_at',
-          'username'
-        )
-        .join('users', 'users.user_id', 'articles.created_by')
-        .where('slug', params.slug)
-        .first();
+      const article = await getArticleBySlug(params.slug, user.user_id);
 
       if (!article) {
         return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
       }
 
-      const [favorites, tags] = await Promise.all([
-        getFavoritesDb().where('article_slug', params.slug),
-        getTagsDb().where('article_slug', params.slug)
-      ]);
-      const { created_at, updated_at, username, ...restArticle } = article;
-
-      await reply.code(StatusCodes.OK).send({
-        article: {
-          ...restArticle,
-          author: username,
-          createdAt: new Date(created_at).toISOString(),
-          favorited: Boolean(favorites.find(({ user_id }) => user_id === user.user_id)),
-          favoritesCount: favorites.length,
-          tagList: tags.map(({ tag }) => tag),
-          updatedAt: new Date(updated_at).toISOString()
-        }
-      });
+      await reply.code(StatusCodes.OK).send({ article });
     },
     onRequest: [instance.authenticate]
   });
