@@ -3,10 +3,10 @@ import { getUserDb } from './data';
 import { server } from './server';
 
 const testUser = {
-  email: 'user@test.com',
-  password: 'test-password',
+  email: 'server-user@test.com',
+  password: 'test-server-password',
   user_id: 1,
-  username: 'testuser69'
+  username: 'testuser69-server'
 };
 
 describe('Server', () => {

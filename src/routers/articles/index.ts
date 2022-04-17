@@ -10,7 +10,8 @@ import {
   getFavoritesDb,
   getTagsDb,
   getUserDb
-} from '../data';
+} from '../../data';
+import { router as slugRouter } from './slug';
 
 type ReplyArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>
@@ -76,31 +77,9 @@ interface GetFeedGeneric {
   Reply: { articles: Array<ReplyArticle>; articlesCount: number };
 }
 
-interface GetArticleGeneric {
-  Params: { slug: string };
-  Reply: { article: ReplyArticle };
-}
-
-const UpdateArticleSchema = {
-  properties: {
-    article: { properties: { body: { type: 'string' } }, type: 'object' }
-  },
-  required: ['article'],
-  type: 'object'
-} as const;
-
-interface UpdateArticleGeneric {
-  Body: FromSchema<typeof UpdateArticleSchema>
-  Params: { slug: string };
-  Reply: { article: ReplyArticle | null };
-}
-
-interface FavoriteArticleGeneric {
-  Params: { slug: string };
-  Reply: { article: ReplyArticle | null };
-}
-
 export const router: FastifyPluginCallback = (instance, options, done) => {
+  instance.register(slugRouter, { prefix: '/:slug' });
+
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
     let user: Pick<User, 'user_id'> | undefined;
@@ -289,92 +268,6 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         }),
         articlesCount: articlesCount['count(*)']
       });
-    },
-    onRequest: [instance.authenticate]
-  });
-
-  instance.get<GetArticleGeneric>('/:slug', async (request, reply) => {
-    let user: Pick<User, 'user_id'> | undefined;
-
-    if (request.headers.authorization) {
-      user = await getUserDb()
-        .select('user_id')
-        .where('token', request.headers.authorization?.replace('Bearer ', ''))
-        .first();
-    }
-
-    const article = await getArticleBySlug(request.params.slug, user?.user_id);
-
-    if (!article) {
-      return reply.code(StatusCodes.NOT_FOUND).send();
-    }
-
-    await reply.send({ article });
-  });
-
-  instance.put<UpdateArticleGeneric>('/:slug', {
-    handler: async (request, reply) => {
-      const { headers, params } = request;
-      const user = await getUserDb()
-        .select('user_id')
-        .where('token', headers.authorization?.replace('Bearer ', ''))
-        .first()
-
-      if (!user) {
-        return reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
-      }
-
-      // Update article
-      await getArticleDb()
-        .update({
-          body: request.body.article.body,
-          updated_at: new Date().toISOString()
-        })
-        .where({ created_by: user.user_id, slug: params.slug });
-
-      const article = await getArticleBySlug(params.slug, user.user_id);
-
-      if (!article) {
-        return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
-      }
-
-      await reply.code(StatusCodes.OK).send({ article });
-    },
-    onRequest: [instance.authenticate]
-  });
-
-  instance.post<FavoriteArticleGeneric>('/:slug/favorite', {
-    handler: async (request, reply) => {
-      const user = await getUserDb()
-        .select('user_id')
-        .where('token', request.headers.authorization?.replace('Bearer ', ''))
-        .first()
-
-      if (!user) {
-        return reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
-      }
-
-      const oldArticle = await getArticleBySlug(
-        request.params.slug,
-        user.user_id
-      );
-
-      if (!oldArticle) {
-        return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
-      }
-
-      if (!oldArticle.favorited) {
-        await getFavoritesDb().insert({
-          article_slug: oldArticle.slug,
-          user_id: user.user_id
-        });
-      }
-
-      const article = await getArticleBySlug(request.params.slug, user.user_id);
-
-      if (!article) throw new Error('Article not found after update');
-
-      await reply.code(StatusCodes.OK).send({ article });
     },
     onRequest: [instance.authenticate]
   });

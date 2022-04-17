@@ -5,7 +5,6 @@ import { router } from './user';
 const server = fastify();
 
 server.decorate('authenticate', async () => {});
-server.register(router);
 
 const testUser = {
   email: 'user@test.com',
@@ -15,6 +14,10 @@ const testUser = {
 };
 
 describe('User router', () => {
+  beforeAll(async () => {
+    await server.register(router);
+  });
+
   // Recreate the user to ensure it's fresh
   beforeEach(async () => {
     await getUserDb().where('username', testUser.username).delete();
@@ -22,7 +25,7 @@ describe('User router', () => {
   });
 
   it('[GET] /user returns the current logged in user', async () => {
-    const testToken = 'test-token';
+    const testToken = 'users-test-token';
     await getUserDb()
       .update({ token: testToken })
       .where('email', testUser.email);
@@ -37,7 +40,7 @@ describe('User router', () => {
   });
 
   it('[PUT] /user updates user and returns new values', async () => {
-    const testToken = 'test-token';
+    const testToken = 'users-test-token';
     await getUserDb()
       .update({ token: testToken })
       .where('email', testUser.email);
