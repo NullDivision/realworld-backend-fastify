@@ -153,14 +153,14 @@ describe('Articles router', () => {
       article: {
         author: testUser.username,
         body: testArticle.body,
-        createdAt: expect.any(String),
+        createdAt: expect.stringMatching(/^\d{4,}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d.\d+(?:[+-][0-2]\d:[0-5]\d|Z)$/),
         description: testArticle.description,
         favorited: false,
         favoritesCount: 0,
         slug: 'star-wars-a-new-hope',
         tagList: expect.arrayContaining(testArticle.tagList),
         title: testArticle.title,
-        updatedAt: expect.any(String)
+        updatedAt: expect.stringMatching(/^\d{4,}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d.\d+(?:[+-][0-2]\d:[0-5]\d|Z)$/)
       }
     });
   });
@@ -198,6 +198,7 @@ describe('Articles router', () => {
           author: testUser.username,
           body: null,
           createdAt: testArticles[1].created_at,
+          description: null,
           favorited: false,
           favoritesCount: 0,
           slug: testArticles[1].slug,
@@ -209,6 +210,7 @@ describe('Articles router', () => {
           author: testUser.username,
           body: null,
           createdAt: testArticles[0].created_at,
+          description: null,
           favorited: false,
           favoritesCount: 0,
           slug: testArticles[0].slug,

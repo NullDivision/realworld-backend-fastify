@@ -246,7 +246,15 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       }
 
       const articles: Array<Article & User> = await articlesQuery
-        .select('body', 'created_at', 'slug', 'title', 'updated_at', 'username')
+        .select(
+          'body',
+          'created_at',
+          'description',
+          'slug',
+          'title',
+          'updated_at',
+          'username'
+        )
         .join('users', 'users.user_id', 'articles.created_by')
         .orderBy('created_at', 'desc');
       const favoritesList = await getFavoritesDb().whereIn(
@@ -346,22 +354,27 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         return reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
       }
 
-      const article = await getArticleBySlug(request.params.slug, user.user_id);
+      const oldArticle = await getArticleBySlug(
+        request.params.slug,
+        user.user_id
+      );
 
-      if (!article) {
+      if (!oldArticle) {
         return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
       }
 
-      if (!article.favorited) {
+      if (!oldArticle.favorited) {
         await getFavoritesDb().insert({
-          article_slug: article.slug,
+          article_slug: oldArticle.slug,
           user_id: user.user_id
         });
       }
 
-      await reply.code(StatusCodes.OK).send({
-        article: { ...article, favorited: true }
-      });
+      const article = await getArticleBySlug(request.params.slug, user.user_id);
+
+      if (!article) throw new Error('Article not found after update');
+
+      await reply.code(StatusCodes.OK).send({ article });
     },
     onRequest: [instance.authenticate]
   });

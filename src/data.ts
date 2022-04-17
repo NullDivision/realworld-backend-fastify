@@ -97,10 +97,10 @@ export const getArticleBySlug = async (
   return {
     ...restArticle,
     author: username,
-    createdAt: created_at,
+    createdAt: new Date(created_at).toISOString(),
     favorited: !!(currentUserId && favorites.find(({ user_id }) => user_id === currentUserId)),
     favoritesCount: favorites.length,
     tagList: tagsList.map(({ tag }) => tag),
-    updatedAt: updated_at
+    updatedAt: new Date(updated_at).toISOString()
   };
 };
