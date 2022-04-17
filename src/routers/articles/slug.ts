@@ -1,7 +1,6 @@
 import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
-import slugify from 'slugify';
 import {
   Article,
   User,
