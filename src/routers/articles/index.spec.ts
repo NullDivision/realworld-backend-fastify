@@ -30,6 +30,12 @@ describe('Articles router', () => {
   });
 
   describe('[GET] /', () => {
+    beforeEach(async () => {
+      await getArticleDb().delete();
+      await getTagsDb().delete();
+      await getUserDb().delete();
+    });
+
     it('returns a list of articles', async () => {
       const testCreateDate = '2022-04-06T17:46:24.000Z'
       const testUpdateDate = '2022-04-06T17:46:24.000Z'
@@ -43,10 +49,8 @@ describe('Articles router', () => {
         updated_at: testUpdateDate
       };
 
-      await getUserDb().delete();
       await getUserDb().insert([testUser]);
       await getArticleDb().insert([testArticle]);
-      await getTagsDb().delete();
       await getTagsDb().insert([{
         article_slug: testArticle.slug,
         tag: 'test'

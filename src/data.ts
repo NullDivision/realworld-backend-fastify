@@ -33,7 +33,7 @@ export interface Favorites {
 }
 
 console.info(`Setting up database for '${process.env['NODE_ENV']}' environment`);
-const db = knex(require('../knexfile.js')[process.env['NODE_ENV']]);
+export const db = knex(require('../knexfile.js')[process.env['NODE_ENV']]);
 
 export const getArticleDb = () => db<Article>('articles');
 export const getTagsDb = () => db<ArticleTag>('articles_tags');
