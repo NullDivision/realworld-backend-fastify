@@ -287,4 +287,24 @@ describe('Articles router', () => {
       }
     });
   });
+
+  it('[POST] /{{slug}}/favorite adds article to user favorites and returns the article', async () => {
+    const testToken = 'on-favorite-token';
+
+    await getUserDb().insert({ ...testUser, token: testToken });
+    await getArticleDb().insert({
+      created_by: testUser.user_id,
+      slug: 'unfavorited-article',
+      title: 'Unfavorited article'
+    });
+
+    const reply = await server.inject({
+      headers: { 'authorization': `Bearer ${testToken}` },
+      method: 'POST',
+      path: '/unfavorited-article/favorite'
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+    expect(reply.json()).toEqual({ article: expect.any(Object) });
+  });
 });

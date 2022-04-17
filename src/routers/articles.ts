@@ -95,6 +95,11 @@ interface UpdateArticleGeneric {
   Reply: { article: ReplyArticle | null };
 }
 
+interface FavoriteArticleGeneric {
+  Params: { slug: string };
+  Reply: { article: ReplyArticle | null };
+}
+
 export const router: FastifyPluginCallback = (instance, options, done) => {
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
@@ -326,6 +331,37 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       }
 
       await reply.code(StatusCodes.OK).send({ article });
+    },
+    onRequest: [instance.authenticate]
+  });
+
+  instance.post<FavoriteArticleGeneric>('/:slug/favorite', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first()
+
+      if (!user) {
+        return reply.code(StatusCodes.UNAUTHORIZED).send({ article: null });
+      }
+
+      const article = await getArticleBySlug(request.params.slug, user.user_id);
+
+      if (!article) {
+        return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
+      }
+
+      if (!article.favorited) {
+        await getFavoritesDb().insert({
+          article_slug: article.slug,
+          user_id: user.user_id
+        });
+      }
+
+      await reply.code(StatusCodes.OK).send({
+        article: { ...article, favorited: true }
+      });
     },
     onRequest: [instance.authenticate]
   });

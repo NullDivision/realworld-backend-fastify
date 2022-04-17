@@ -33,6 +33,26 @@ server.decorate('authenticate', async (request: FastifyRequest, reply: FastifyRe
   }
 });
 
+// By default Fastify throws an error when body is empty
+server.addContentTypeParser(
+  'application/json',
+  { bodyLimit: 0 },
+  (request, payload, done) => {
+    let data = '';
+
+    payload.on('data', (chunk) => {
+      data += chunk;
+    })
+    payload.on('end', () => {
+      if (data.length) {
+        return done(null, JSON.parse(data));
+      }
+
+      done(null, {});
+    });
+  }
+);
+
 declare module 'fastify' {
   export interface FastifyInstance {
     authenticate: onRequestAsyncHookHandler;
