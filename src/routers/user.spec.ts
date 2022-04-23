@@ -9,7 +9,7 @@ server.decorate('authenticate', async () => {});
 const testUser = {
   email: 'user@test.com',
   password: 'test-password',
-  user_id: 1,
+  user_id: 3,
   username: 'testuser69'
 };
 

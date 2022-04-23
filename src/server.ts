@@ -15,7 +15,7 @@ export const server = fastify({
 });
 
 // It sucks every year, this is just the most recent
-server.register(jwt, { secret: 'jssucks-2022' });
+void server.register(jwt, { secret: 'jssucks-2022' });
 
 server.addHook('onRequest', (request, reply, done) => {
   if (request.headers.authorization?.startsWith('Token ')) {
@@ -59,6 +59,6 @@ declare module 'fastify' {
   }
 }
 
-server.register(articlesRouter, { prefix: '/articles' });
-server.register(userRouter, { prefix: '/user' });
-server.register(usersRouter, { prefix: '/users' });
+void server.register(articlesRouter, { prefix: '/articles' });
+void server.register(userRouter, { prefix: '/user' });
+void server.register(usersRouter, { prefix: '/users' });

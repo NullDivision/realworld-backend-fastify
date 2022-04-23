@@ -1,6 +1,6 @@
 import fastify from 'fastify';
 import { StatusCodes } from 'http-status-codes';
-import { getArticleDb, getUserDb } from '../../data';
+import { getArticleDb, getFavoritesDb, getTagsDb, getUserDb } from '../../data';
 import { router } from './slug';
 
 const server = fastify();
@@ -18,6 +18,11 @@ const testUser = {
   user_id: 2,
   username: 'testuser69-slug'
 };
+const testArticle = {
+  created_by: testUser.user_id,
+  slug: 'slug-test-slug',
+  title: 'Slug test article'
+};
 
 describe('Article slug router', () => {
   beforeAll(async () => {
@@ -29,21 +34,16 @@ describe('Article slug router', () => {
 
   beforeEach(async () => {
     // Remove articles each time to make sure there are no false positives
-    await getArticleDb().delete();
+    await getArticleDb().where('slug', testArticle.slug).delete();
+    await getArticleDb().insert(testArticle);
+    await getFavoritesDb().where('article_slug', testArticle.slug).delete();
+    await getTagsDb().where('article_slug', testArticle.slug).delete();
   });
 
   it('[GET] /{{slug}} returns a single article', async () => {
-    const testSlug = 'my-first-post';
-
-    await getArticleDb().insert({
-      created_by: testUser.user_id,
-      slug: testSlug,
-      title: 'My first post'
-    });
-
     const reply = await server.inject({
       method: 'GET',
-      path: `/${testSlug}`
+      path: `/${testArticle.slug}`
     });
 
     expect(reply.statusCode).toBe(StatusCodes.OK);
@@ -55,9 +55,9 @@ describe('Article slug router', () => {
         description: null,
         favorited: false,
         favoritesCount: 0,
-        slug: testSlug,
+        slug: testArticle.slug,
         tagList: [],
-        title: 'My first post',
+        title: testArticle.title,
         updatedAt: expect.any(String)
       }
     });
@@ -66,16 +66,10 @@ describe('Article slug router', () => {
   it('[PUT] /{{slug}} updates and returns a single article', async () => {
     const testBody = '...and then there was more';
 
-    await getArticleDb().insert({
-      created_by: testUser.user_id,
-      slug: 'my-first-post',
-      title: 'My first post'
-    });
-
     const reply = await server.inject({
       headers: { authorization: `Bearer ${testUser.token}` },
       method: 'PUT',
-      path: '/my-first-post',
+      path: `/${testArticle.slug}`,
       payload: { article: { body: testBody } }
     });
 
@@ -88,28 +82,40 @@ describe('Article slug router', () => {
         description: null,
         favorited: false,
         favoritesCount: 0,
-        slug: 'my-first-post',
+        slug: testArticle.slug,
         tagList: [],
-        title: 'My first post',
+        title: testArticle.title,
         updatedAt: expect.any(String)
       }
     });
   });
 
   it('[POST] /{{slug}}/favorite adds article to user favorites and returns the article', async () => {
-    await getArticleDb().insert({
-      created_by: testUser.user_id,
-      slug: 'unfavorited-article',
-      title: 'Unfavorited article'
-    });
-
     const reply = await server.inject({
       headers: { 'authorization': `Bearer ${testUser.token}` },
       method: 'POST',
-      path: '/unfavorited-article/favorite'
+      path: `/${testArticle.slug}/favorite`
     });
 
     expect(reply.statusCode).toBe(StatusCodes.OK);
     expect(reply.json()).toEqual({ article: expect.any(Object) });
+  });
+
+  it('[DELETE] /{{slug}}/favorite removes the article from user favorites and returns the article', async () => {
+    await getFavoritesDb().insert({
+      article_slug: testArticle.slug,
+      user_id: testUser.user_id
+    });
+
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testUser.token}` },
+      method: 'DELETE',
+      path: `/${testArticle.slug}/favorite`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+    expect(reply.json()).toEqual({
+      article: expect.objectContaining({ favorited: false })
+    });
   });
 });

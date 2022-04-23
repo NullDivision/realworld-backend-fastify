@@ -21,9 +21,8 @@ type ReplyArticle =
     updatedAt: Article['updated_at'];
   };
 
-interface BaseSlugGeneric { Params: { slug: string } }
-
-interface GetArticleGeneric extends BaseSlugGeneric {
+interface BaseSlugGeneric {
+  Params: { slug: string };
   Reply: { article: ReplyArticle | null };
 }
 
@@ -36,16 +35,11 @@ const UpdateArticleSchema = {
 } as const;
 
 interface UpdateArticleGeneric extends BaseSlugGeneric {
-  Body: FromSchema<typeof UpdateArticleSchema>
-  Reply: { article: ReplyArticle | null };
-}
-
-interface FavoriteArticleGeneric extends BaseSlugGeneric {
-  Reply: { article: ReplyArticle | null };
+  Body: FromSchema<typeof UpdateArticleSchema>;
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
-  instance.get<GetArticleGeneric>('/', async (request, reply) => {
+  instance.get<BaseSlugGeneric>('/', async (request, reply) => {
     let user: Pick<User, 'user_id'> | undefined;
 
     if (request.headers.authorization) {
@@ -58,7 +52,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     const article = await getArticleBySlug(request.params.slug, user?.user_id);
 
     if (!article) {
-      return reply.code(StatusCodes.NOT_FOUND).send();
+      return reply.code(StatusCodes.NOT_FOUND).send({ article: null });
     }
 
     await reply.send({ article });
@@ -95,7 +89,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     onRequest: [instance.authenticate]
   });
 
-  instance.post<FavoriteArticleGeneric>('/favorite', {
+  instance.post<BaseSlugGeneric>('/favorite', {
     handler: async (request, reply) => {
       const user = await getUserDb()
         .select('user_id')
@@ -127,6 +121,30 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       if (!article) throw new Error('Article not found after update');
 
       await reply.code(StatusCodes.OK).send({ article });
+    },
+    onRequest: [instance.authenticate]
+  });
+
+  instance.delete<BaseSlugGeneric>('/favorite', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first()
+
+      if (user) {
+        await getFavoritesDb().where({
+          article_slug: request.params.slug,
+          user_id: user.user_id
+        }).delete();
+      }
+
+      const article = await getArticleBySlug(
+        request.params.slug,
+        user?.user_id
+      );
+
+      return reply.send({ article: article || null });
     },
     onRequest: [instance.authenticate]
   });

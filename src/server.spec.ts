@@ -5,7 +5,7 @@ import { server } from './server';
 const testUser = {
   email: 'server-user@test.com',
   password: 'test-server-password',
-  user_id: 1,
+  user_id: 4,
   username: 'testuser69-server'
 };
 

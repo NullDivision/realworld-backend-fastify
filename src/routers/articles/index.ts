@@ -77,8 +77,8 @@ interface GetFeedGeneric {
   Reply: { articles: Array<ReplyArticle>; articlesCount: number };
 }
 
-export const router: FastifyPluginCallback = (instance, options, done) => {
-  instance.register(slugRouter, { prefix: '/:slug' });
+export const router: FastifyPluginCallback = async (instance, options, done) => {
+  await instance.register(slugRouter, { prefix: '/:slug' });
 
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
@@ -101,11 +101,11 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       .join('users', 'users.user_id', 'articles.created_by')
       .modify(queryBuilder => {
         if (request.query.author) {
-          queryBuilder.where('username', request.query.author);
+          void queryBuilder.where('username', request.query.author);
         }
 
         if (filteredTags.length > 0) {
-          queryBuilder.whereIn('slug', filteredTags);
+          void queryBuilder.whereIn('slug', filteredTags);
         }
       });
     const [counter] = await articlesQuery.clone().count<{}, [{ counter: number }]>('slug as counter');
@@ -245,7 +245,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         articles.map(({ slug }) => slug)
       );
 
-      reply.send({
+      return reply.send({
         articles: articles.map<ReplyArticle>((article) => {
           const { created_at, updated_at, username, ...restArticle } = article;
           const articleFavorites = favoritesList.filter(({ article_slug }) =>
