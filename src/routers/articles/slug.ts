@@ -3,11 +3,13 @@ import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
 import {
   Article,
+  Comment,
   User,
   getArticleBySlug,
   getArticleDb,
   getFavoritesDb,
-  getUserDb
+  getUserDb,
+  getCommentsDb
 } from '../../data';
 
 type ReplyArticle =
@@ -23,6 +25,9 @@ type ReplyArticle =
 
 interface BaseSlugGeneric {
   Params: { slug: string };
+}
+
+interface AgreementSlugGeneric extends BaseSlugGeneric {
   Reply: { article: ReplyArticle | null };
 }
 
@@ -34,12 +39,36 @@ const UpdateArticleSchema = {
   type: 'object'
 } as const;
 
-interface UpdateArticleGeneric extends BaseSlugGeneric {
+interface UpdateArticleGeneric extends AgreementSlugGeneric {
   Body: FromSchema<typeof UpdateArticleSchema>;
 }
 
+const AddCommentSchema = {
+  properties: {
+    comment: {
+      properties: { body: { type: 'string' } },
+      required: ['body'],
+      type: 'object'
+    }
+  },
+  required: ['comment'],
+  type: 'object'
+} as const;
+
+interface ReplyComment extends Pick<Comment, 'body'> {
+  author: User['username'];
+  createdAt: string;
+  id: Comment['comment_id'];
+  updatedAt: string;
+}
+
+interface AddComment {
+  Body: FromSchema<typeof AddCommentSchema>;
+  Reply: { comment: null }
+}
+
 export const router: FastifyPluginCallback = (instance, options, done) => {
-  instance.get<BaseSlugGeneric>('/', async (request, reply) => {
+  instance.get<AgreementSlugGeneric>('/', async (request, reply) => {
     let user: Pick<User, 'user_id'> | undefined;
 
     if (request.headers.authorization) {
@@ -89,7 +118,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     onRequest: [instance.authenticate]
   });
 
-  instance.post<BaseSlugGeneric>('/favorite', {
+  instance.post<AgreementSlugGeneric>('/favorite', {
     handler: async (request, reply) => {
       const user = await getUserDb()
         .select('user_id')
@@ -125,7 +154,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     onRequest: [instance.authenticate]
   });
 
-  instance.delete<BaseSlugGeneric>('/favorite', {
+  instance.delete<AgreementSlugGeneric>('/favorite', {
     handler: async (request, reply) => {
       const user = await getUserDb()
         .select('user_id')
@@ -147,6 +176,46 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       return reply.send({ article: article || null });
     },
     onRequest: [instance.authenticate]
+  });
+
+  instance.post<AddComment>('/comments', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+          .select('user_id')
+          .where('token', request.headers.authorization?.replace('Bearer ', ''))
+          .first();
+
+      if (!user) {
+        await reply.code(StatusCodes.UNAUTHORIZED).send({ comment: null });
+      }
+
+      const [insertId] = await getCommentsDb().insert({
+        body: request.body.comment.body,
+        user_id: user?.user_id
+      });
+
+      const { created_at, updated_at, ...comment } = await getCommentsDb()
+        .select(
+          'username as author',
+          'body',
+          'created_at',
+          'comment_id as id',
+          'updated_at'
+        )
+        .join('users', 'users.user_id', 'comments.user_id')
+        .where({ comment_id: insertId })
+        .first();
+
+      await reply.code(StatusCodes.CREATED).send({
+        comment: {
+          ...comment,
+          createdAt: new Date(created_at).toISOString(),
+          updatedAt: new Date(updated_at).toISOString()
+        } || null
+      });
+    },
+    onRequest: [instance.authenticate],
+    schema: { body: AddCommentSchema }
   });
 
   done();

@@ -32,6 +32,14 @@ export interface Favorites {
   user_id: User['user_id'];
 }
 
+export interface Comment {
+  body: string;
+  comment_id: number;
+  created_at: string;
+  updated_at: string;
+  user_id: User['user_id'];
+}
+
 console.info(`Setting up database for '${process.env['NODE_ENV']}' environment`);
 export const db = knex(require('../knexfile.js')[process.env['NODE_ENV']]);
 
@@ -39,6 +47,7 @@ export const getArticleDb = () => db<Article>('articles');
 export const getTagsDb = () => db<ArticleTag>('articles_tags');
 export const getUserDb = () => db<User>('users');
 export const getFavoritesDb = () => db<Favorites>('favorites');
+export const getCommentsDb = () => db<Comment>('comments');
 
 type PublicArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>

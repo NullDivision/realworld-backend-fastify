@@ -9,6 +9,7 @@
   "scripts": {
     "build": "rm -rf ./dist && tsc -p ./tsconfig.build.json",
     "lint": "eslint --ext=.ts ./src",
+    "prestart": "yarn build",
     "start": "node .",
     "test": "jest"
   },

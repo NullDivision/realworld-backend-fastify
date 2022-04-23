@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { getArticleDb, getFavoritesDb, getTagsDb, getUserDb } from '../../data';
 import { router } from './slug';
 
-const server = fastify();
+const server = fastify({ logger: { level: 'error' } });
 
 server.decorate('authenticate', async (request: any) => {
   if (!request.headers.authorization) {
@@ -116,6 +116,28 @@ describe('Article slug router', () => {
     expect(reply.statusCode).toBe(StatusCodes.OK);
     expect(reply.json()).toEqual({
       article: expect.objectContaining({ favorited: false })
+    });
+  });
+
+  it('[POST] /{{slug}}/comments adds a comment for a given article', async () => {
+    const testPayload = { comment: { body: 'Test comment' } };
+
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testUser.token}` },
+      method: 'POST',
+      path: `/${testArticle.slug}/comments`,
+      payload: testPayload
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.CREATED);
+    expect(reply.json()).toEqual({
+      comment: {
+        author: testUser.username,
+        body: testPayload.comment.body,
+        createdAt: expect.stringMatching(/^\d{4,}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d.\d+(?:[+-][0-2]\d:[0-5]\d|Z)$/),
+        id: 1,
+        updatedAt: expect.stringMatching(/^\d{4,}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d.\d+(?:[+-][0-2]\d:[0-5]\d|Z)$/)
+      }
     });
   });
 });

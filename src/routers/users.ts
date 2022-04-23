@@ -92,7 +92,11 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     handler: async (request, reply) => {
       const user = await getTokenizedUserByEmail(request.body.user.email);
 
-      if (user == null) return await reply.code(StatusCodes.UNAUTHORIZED).send({ user: null });
+      if (user == null) {
+        request.log.error('User not found');
+
+        return await reply.code(StatusCodes.UNAUTHORIZED).send({ user: null });
+      }
 
       const { password, user_id, ...tokenizedUser } = user;
       const isValidPassword = await compare(
@@ -100,7 +104,11 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         user.password
       );
 
-      if (!isValidPassword) return await reply.code(StatusCodes.UNAUTHORIZED).send();
+      if (!isValidPassword) {
+        request.log.error('Invalid password');
+
+        return await reply.code(StatusCodes.UNAUTHORIZED).send();
+      }
 
       const token = instance.jwt.sign({ payload: {} });
 

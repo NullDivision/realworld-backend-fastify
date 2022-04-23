@@ -11,7 +11,7 @@ import { router as userRouter } from './routers/user';
 import { router as usersRouter } from './routers/users';
 
 export const server = fastify({
-  logger: process.env['NODE_ENV'] === 'development'
+  logger: { level: 'error' }
 });
 
 // It sucks every year, this is just the most recent
