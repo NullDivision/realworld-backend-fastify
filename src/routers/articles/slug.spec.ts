@@ -140,4 +140,13 @@ describe('Article slug router', () => {
       }
     });
   });
+
+  it('[GET] /{{slug}}/comments returns comments related to article', async () => {
+    const reply = await server.inject({
+      method: 'GET',
+      path: `/${testArticle.slug}/comments`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+  });
 });

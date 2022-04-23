@@ -33,6 +33,7 @@ export interface Favorites {
 }
 
 export interface Comment {
+  article_slug: string;
   body: string;
   comment_id: number;
   created_at: string;

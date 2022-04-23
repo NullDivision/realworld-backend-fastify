@@ -14,6 +14,7 @@ exports.up = function(knex) {
     table.text('body').notNullable();
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
+    table.string('article_slug').index().references('slug').inTable('articles');
   });
 };
 

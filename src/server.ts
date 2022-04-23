@@ -11,7 +11,7 @@ import { router as userRouter } from './routers/user';
 import { router as usersRouter } from './routers/users';
 
 export const server = fastify({
-  logger: { level: 'error' }
+  logger: true
 });
 
 // It sucks every year, this is just the most recent

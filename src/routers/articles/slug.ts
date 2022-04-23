@@ -62,9 +62,13 @@ interface ReplyComment extends Pick<Comment, 'body'> {
   updatedAt: string;
 }
 
-interface AddComment {
+interface AddComment extends BaseSlugGeneric {
   Body: FromSchema<typeof AddCommentSchema>;
-  Reply: { comment: null }
+  Reply: { comment: ReplyComment | null }
+}
+
+interface GetComments extends BaseSlugGeneric {
+  Reply: { comments: Array<ReplyComment> };
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
@@ -190,6 +194,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       }
 
       const [insertId] = await getCommentsDb().insert({
+        article_slug: request.params.slug,
         body: request.body.comment.body,
         user_id: user?.user_id
       });
@@ -216,6 +221,27 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     },
     onRequest: [instance.authenticate],
     schema: { body: AddCommentSchema }
+  });
+
+  instance.get<GetComments>('/comments', async (request, reply) => {
+    const comments = await getCommentsDb()
+      .select(
+        'username as author',
+        'body',
+        'created_at',
+        'comment_id as id',
+        'updated_at'
+      )
+      .join('users', 'users.user_id', 'comments.user_id')
+      .where('article_slug', request.params.slug);
+
+    await reply.code(StatusCodes.OK).send({
+      comments: comments.map(({ created_at, updated_at, ...comment }) => ({
+        ...comment,
+        createdAt: new Date(created_at).toISOString(),
+        updatedAt: new Date(updated_at).toISOString()
+      }))
+    });
   });
 
   done();
