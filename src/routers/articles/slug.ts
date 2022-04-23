@@ -62,13 +62,17 @@ interface ReplyComment extends Pick<Comment, 'body'> {
   updatedAt: string;
 }
 
-interface AddComment extends BaseSlugGeneric {
+interface AddCommentGeneric extends BaseSlugGeneric {
   Body: FromSchema<typeof AddCommentSchema>;
   Reply: { comment: ReplyComment | null }
 }
 
-interface GetComments extends BaseSlugGeneric {
+interface GetCommentsGeneric extends BaseSlugGeneric {
   Reply: { comments: Array<ReplyComment> };
+}
+
+interface DeleteCommentGeneric extends BaseSlugGeneric {
+  Params: BaseSlugGeneric['Params'] & { commentId: string };
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
@@ -182,7 +186,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     onRequest: [instance.authenticate]
   });
 
-  instance.post<AddComment>('/comments', {
+  instance.post<AddCommentGeneric>('/comments', {
     handler: async (request, reply) => {
       const user = await getUserDb()
           .select('user_id')
@@ -223,7 +227,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
     schema: { body: AddCommentSchema }
   });
 
-  instance.get<GetComments>('/comments', async (request, reply) => {
+  instance.get<GetCommentsGeneric>('/comments', async (request, reply) => {
     const comments = await getCommentsDb()
       .select(
         'username as author',
@@ -242,6 +246,28 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         updatedAt: new Date(updated_at).toISOString()
       }))
     });
+  });
+
+  instance.delete<DeleteCommentGeneric>('/comments/:commentId(\\d+)', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first();
+
+      if (!user) {
+        return reply.code(StatusCodes.UNAUTHORIZED).send();
+      }
+
+      await getCommentsDb().where({
+        article_slug: request.params.slug,
+        comment_id: parseInt(request.params.commentId, 10),
+        user_id: user.user_id
+      }).delete();
+
+      await reply.code(StatusCodes.NO_CONTENT).send();
+    },
+    onRequest: [instance.authenticate]
   });
 
   done();

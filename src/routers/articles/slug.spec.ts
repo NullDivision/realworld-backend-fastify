@@ -1,6 +1,6 @@
 import fastify from 'fastify';
 import { StatusCodes } from 'http-status-codes';
-import { getArticleDb, getFavoritesDb, getTagsDb, getUserDb } from '../../data';
+import { getArticleDb, getCommentsDb, getFavoritesDb, getTagsDb, getUserDb } from '../../data';
 import { router } from './slug';
 
 const server = fastify({ logger: { level: 'error' } });
@@ -148,5 +148,31 @@ describe('Article slug router', () => {
     });
 
     expect(reply.statusCode).toBe(StatusCodes.OK);
+  });
+
+  it('[DELETE] /{{slug}}/comments/{{commentId}} deletes a comment off an article', async () => {
+    const testComment = {
+      article_slug: testArticle.slug,
+      body: 'test comment',
+      comment_id: 1,
+      user_id: testUser.user_id
+    };
+
+    await getCommentsDb().where('comment_id', testComment.comment_id).delete();
+    await getCommentsDb().insert(testComment);
+
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testUser.token}` },
+      method: 'DELETE',
+      path: `/${testArticle.slug}/comments/${testComment.comment_id}`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.NO_CONTENT);
+
+    const commentCount = await getCommentsDb()
+      .where('comment_id', testComment.comment_id)
+      .count();
+
+    expect(commentCount.at(0)?.['count(*)']).toBe(0);
   });
 });
