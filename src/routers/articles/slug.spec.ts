@@ -175,4 +175,14 @@ describe('Article slug router', () => {
 
     expect(commentCount.at(0)?.['count(*)']).toBe(0);
   });
+
+  it('[DELETE] /{{slug}} deletes an article', async () => {
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testUser.token}` },
+      method: 'DELETE',
+      path: `/${testArticle.slug}`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.NO_CONTENT);
+  });
 });

@@ -9,7 +9,8 @@ import {
   getArticleDb,
   getFavoritesDb,
   getUserDb,
-  getCommentsDb
+  getCommentsDb,
+  getTagsDb
 } from '../../data';
 
 type ReplyArticle =
@@ -266,6 +267,34 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       }).delete();
 
       await reply.code(StatusCodes.NO_CONTENT).send();
+    },
+    onRequest: [instance.authenticate]
+  });
+
+  instance.delete<BaseSlugGeneric>('/', {
+    handler: async (request, reply) => {
+      const user = await getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first();
+
+      if (!user) return reply.code(StatusCodes.UNAUTHORIZED).send();
+
+      // Check if user is the owner of the article
+      const article = await getArticleDb().where({
+        created_by: user.user_id,
+        slug: request.params.slug
+      });
+
+      if (!article) return reply.code(StatusCodes.UNAUTHORIZED).send();
+
+      await Promise.all([
+        getFavoritesDb().where('article_slug', request.params.slug).delete(),
+        getTagsDb().where('article_slug', request.params.slug).delete(),
+        getArticleDb().where('slug', request.params.slug).delete()
+      ]);
+
+      return reply.code(StatusCodes.NO_CONTENT).send();
     },
     onRequest: [instance.authenticate]
   });
