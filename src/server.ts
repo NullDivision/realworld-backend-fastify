@@ -18,6 +18,7 @@ export const server = fastify({
 // It sucks every year, this is just the most recent
 void server.register(jwt, { secret: 'jssucks-2022' });
 
+// Conduit uses Token instead of Bearer for the token so we support both
 server.addHook('onRequest', (request, reply, done) => {
   if (request.headers.authorization?.startsWith('Token ')) {
     request.headers.authorization = request.headers.authorization.replace('Token', 'Bearer');
