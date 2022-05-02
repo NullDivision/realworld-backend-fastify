@@ -1,7 +1,7 @@
-import { compare, genSalt, hash } from 'bcrypt';
 import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
+import { encodePassword, validatePassword } from '../auth';
 import { User, getUserDb } from '../data';
 
 const LoginRequestBodySchema = {
@@ -56,11 +56,9 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
   instance.post<UsersPostGeneric>('/', {
     handler: async ({ body }, reply) => {
       try {
-        const salt = await genSalt(10);
-
         await getUserDb().insert({
           email: body.user.email,
-          password: await hash(body.user.password, salt),
+          password: await encodePassword(body.user.password),
           username: body.user.username
         });
 
@@ -99,7 +97,7 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
       }
 
       const { password, user_id, ...tokenizedUser } = user;
-      const isValidPassword = await compare(
+      const isValidPassword = await validatePassword(
         request.body.user.password,
         user.password
       );

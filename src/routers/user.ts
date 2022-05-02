@@ -1,6 +1,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
+import { encodePassword } from '../auth';
 import { User, getUserDb } from '../data';
 
 const getTokenizedUserByToken = (token: string) => {
@@ -19,6 +20,8 @@ const UpdateRequestBodySchema = {
       properties: {
         bio: { type: 'string' },
         email: { type: 'string' },
+        image: { type: 'string' },
+        password: { type: 'string' },
         username: { type: 'string' }
       },
       type: 'object'
@@ -58,7 +61,15 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
         return await reply.code(StatusCodes.UNAUTHORIZED).send({ user: null });
       }
 
-      await getUserDb().where('token', token).update(request.body.user);
+      const { password: newPassword, ...restUpdateUser } = request.body.user;
+
+      let updateFields: Partial<User> = restUpdateUser;
+
+      if (newPassword) {
+        updateFields.password = await encodePassword(newPassword);
+      }
+
+      await getUserDb().where('token', token).update(updateFields);
 
       const user = await getTokenizedUserByToken(token);
 
