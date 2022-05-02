@@ -15,10 +15,15 @@ For more information on how to this works with other frontends/backends, head ov
 
 # How it works
 
-> Describe the general architecture of your app here
+The application is split up into three main components:
+- the routes/ directory contains individual resource routers
+- data.ts contains most of the database related bits
+- server is the core fastify app
 
 # Getting started
 
 This package uses Knex and SQLite. In order to use it simply run the following:
 > yarn knex migrate:latest
+
+Once migrations have been done you can run the application using `yarn start`
 
