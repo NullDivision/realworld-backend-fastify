@@ -9,59 +9,78 @@ interface ProfileGeneric {
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
-  instance.get<ProfileGeneric>('/:username', {
-    handler: async (request, reply) => {
-      const [currentUser, followedUser] = await Promise.all([
-        getUserDb()
-          .select('user_id')
-          .where('token', request.headers.authorization?.replace('Bearer ', ''))
-          .first(),
-        getUserDb()
-          .select('bio', 'email', 'image', 'user_id', 'username')
-          .where('username', request.params.username)
-          .first()
-      ]);
+  instance.addHook('onRequest', instance.authenticate);
 
-      if (!followedUser || !currentUser) return reply.send({ profile: null });
+  instance.get<ProfileGeneric>('/:username', async (request, reply) => {
+    const [currentUser, followedUser] = await Promise.all([
+      getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first(),
+      getUserDb()
+        .select('bio', 'email', 'image', 'user_id', 'username')
+        .where('username', request.params.username)
+        .first()
+    ]);
 
-      const { user_id: followedUserId, ...restFollowedUser } = followedUser;
-      const followState = await getFollowersDb()
-        .where('following_id', followedUserId)
-        .andWhere('user_id', currentUser.user_id)
-        .first();
+    if (!followedUser || !currentUser) return reply.send({ profile: null });
 
-      return reply.send({
-        profile: { ...restFollowedUser, following: !!followState }
-      });
-    },
-    onRequest: [instance.authenticate]
+    const { user_id: followedUserId, ...restFollowedUser } = followedUser;
+    const followState = await getFollowersDb()
+      .where('following_id', followedUserId)
+      .andWhere('user_id', currentUser.user_id)
+      .first();
+
+    return reply.send({
+      profile: { ...restFollowedUser, following: !!followState }
+    });
   });
 
-  instance.post<ProfileGeneric>('/:username/follow', {
-    handler: async (request, reply) => {
-      const [currentUser, followedUser] = await Promise.all([
-        getUserDb()
-          .select('user_id')
-          .where('token', request.headers.authorization?.replace('Bearer ', ''))
-          .first(),
-        getUserDb()
-          .select('bio', 'email', 'image', 'user_id', 'username')
-          .where('username', request.params.username)
-          .first()
-      ]);
+  instance.post<ProfileGeneric>('/:username/follow', async (request, reply) => {
+    const [currentUser, followedUser] = await Promise.all([
+      getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first(),
+      getUserDb()
+        .select('bio', 'email', 'image', 'user_id', 'username')
+        .where('username', request.params.username)
+        .first()
+    ]);
 
-      if (!followedUser || !currentUser) return reply.send({ profile: null });
+    if (!followedUser || !currentUser) return reply.send({ profile: null });
 
-      await getFollowersDb().insert({
-        following_id: followedUser.user_id,
-        user_id: currentUser.user_id
-      });
+    await getFollowersDb().insert({
+      following_id: followedUser.user_id,
+      user_id: currentUser.user_id
+    });
 
-      const { user_id, ...restFollowedUser } = followedUser;
+    const { user_id, ...restFollowedUser } = followedUser;
 
-      await reply.send({ profile: { ...restFollowedUser, following: true } });
-    },
-    onRequest: [instance.authenticate]
+    await reply.send({ profile: { ...restFollowedUser, following: true } });
+  });
+
+  instance.delete<ProfileGeneric>('/:username/follow', async (request, reply) => {
+    const [currentUser, followedUser] = await Promise.all([
+      getUserDb()
+        .select('user_id')
+        .where('token', request.headers.authorization?.replace('Bearer ', ''))
+        .first(),
+      getUserDb()
+        .select('bio', 'email', 'image', 'user_id', 'username')
+        .where('username', request.params.username)
+        .first()
+    ]);
+
+    if (!followedUser || !currentUser) return reply.send({ profile: null });
+
+    const { user_id, ...restFollowedUser } = followedUser;
+
+    await getFollowersDb()
+      .where('following_id', user_id).andWhere('user_id', currentUser.user_id)
+      .delete();
+
+    await reply.send({ profile: { ...restFollowedUser, following: false } });
   });
 
   done();

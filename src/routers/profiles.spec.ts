@@ -58,4 +58,14 @@ describe('Profile router', () => {
     expect(reply.statusCode).toBe(StatusCodes.OK);
     expect(reply.json().profile.following).toBe(true);
   });
+
+  it('[DELETE] /{{username}}/follow deletes a users follow status and returns the profile', async () => {
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${testUser.token}` },
+      method: 'DELETE',
+      path: `/${testFollowedUser.username}/follow`
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.OK);
+  });
 });
