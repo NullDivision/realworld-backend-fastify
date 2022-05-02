@@ -10,6 +10,7 @@ import { router as articlesRouter } from './routers/articles';
 import { router as userRouter } from './routers/user';
 import { router as usersRouter } from './routers/users';
 import { router as profilesRouter } from './routers/profiles';
+import { router as tagsRouter } from './routers/tags';
 
 export const server = fastify({
   logger: true
@@ -65,3 +66,4 @@ void server.register(articlesRouter, { prefix: '/articles' });
 void server.register(userRouter, { prefix: '/user' });
 void server.register(usersRouter, { prefix: '/users' });
 void server.register(profilesRouter, { prefix: '/profiles' })
+void server.register(tagsRouter, { prefix: '/tags' })
