@@ -7,7 +7,8 @@ module.exports = {
   development: {
     client: 'sqlite3',
     connection: { filename: './data/database.sqlite3' },
-    migrations: { filename: './data/migrations' },
+    migrations: { filename: './migrations' },
+    seeds: { directory: './seeds' },
     useNullAsDefault: true
   },
   test: {
@@ -15,7 +16,7 @@ module.exports = {
     // Since Jest runs multiple suites in parallel using a file can lead to lockups
     // Using memory means each suite gets its own throwaway db
     connection: ':memory:',
-    migrations: { filename: './data/migrations' },
+    migrations: { filename: './migrations' },
     useNullAsDefault: true
   }
 };

@@ -9,7 +9,8 @@ import {
   getArticleDb,
   getFavoritesDb,
   getTagsDb,
-  getUserDb
+  getUserDb,
+  getUserByToken
 } from '../../data';
 import { router as slugRouter } from './slug';
 
@@ -23,8 +24,9 @@ type ReplyArticle =
     tagList: string[];
     updatedAt: Article['updated_at'];
   };
+type ArticlesFilters = Record<'author' | 'favorited' | 'limit' | 'offset' | 'tag', string>;
 interface GetArticlesGeneric {
-  Querystring: Partial<Record<'author' | 'tag', string>>;
+  Querystring: Partial<ArticlesFilters>;
   Reply: { articles: ReplyArticle[], articlesCount: number };
 }
 
@@ -83,18 +85,35 @@ export const router: FastifyPluginCallback = async (instance, options, done) => 
   instance.get<GetArticlesGeneric>('/', async (request, reply) => {
     let filteredTags: string[] = [];
     let user: Pick<User, 'user_id'> | undefined;
+    let favoritedUserId: number | undefined;
 
     if (request.headers.authorization) {
-      user = await getUserDb()
-        .select('user_id')
-        .where('token', request.headers.authorization?.replace('Bearer ', ''))
-        .first();
+      user = await getUserByToken(request.headers.authorization?.replace('Bearer ', ''));
     }
 
     if (request.query.tag) {
       filteredTags = (
         await getTagsDb().select('article_slug').where('tag', request.query.tag)
       ).map(({ article_slug }) => article_slug);
+
+      if (!filteredTags.length) {
+        // If there are no tags there can't be any articles associated with them
+        return reply.send({ articles: [], articlesCount: 0 });
+      }
+    }
+
+    if (request.query.favorited) {
+      const favoritedUser = await getUserDb()
+        .select('user_id')
+        .where('username', request.query.favorited)
+        .first();
+
+      if (!favoritedUser) {
+        // If user never favorited anything, there are no articles to return
+        return reply.send({ articles: [], articlesCount: 0 });
+      }
+
+      favoritedUserId = favoritedUser.user_id;
     }
 
     const articlesQuery = getArticleDb()
@@ -102,6 +121,12 @@ export const router: FastifyPluginCallback = async (instance, options, done) => 
       .modify(queryBuilder => {
         if (request.query.author) {
           void queryBuilder.where('username', request.query.author);
+        }
+
+        if (favoritedUserId) {
+          void queryBuilder
+            .join('favorites', 'favorites.article_slug', 'articles.slug')
+            .where('favorites.user_id', favoritedUserId);
         }
 
         if (filteredTags.length > 0) {
@@ -118,7 +143,9 @@ export const router: FastifyPluginCallback = async (instance, options, done) => 
         'title',
         'updated_at',
         'username'
-      );
+      )
+      .limit(request.query.limit ? parseInt(request.query.limit, 10) : 20)
+      .offset(request.query.offset ? parseInt(request.query.offset, 10) : 0);
     const tags = await getTagsDb()
       .whereIn('article_slug', articles.map(({ slug }) => slug));
     const favorites = await getFavoritesDb()

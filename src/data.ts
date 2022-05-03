@@ -120,3 +120,9 @@ export const getArticleBySlug = async (
     updatedAt: new Date(updated_at).toISOString()
   };
 };
+
+export const getUserByToken = async (token: string) =>
+  await getUserDb()
+    .select('user_id')
+    .where('token', token)
+    .first()
