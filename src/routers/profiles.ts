@@ -1,93 +1,84 @@
 import type { FastifyPluginCallback } from 'fastify';
-import { User, getUserDb, getFollowersDb } from '../data';
-
-type TokenizedUser = Omit<User, 'password' | 'token' | 'user_id' | 'email'>;
+import { StatusCodes } from 'http-status-codes';
+import {
+  ConduitProfile,
+  getProfileByUsername,
+  getUserByToken,
+  followUser,
+  unfollowUser
+} from '../data';
 
 interface ProfileGeneric {
   Params: { username: string };
-  Reply: { profile: (TokenizedUser & { following: boolean }) | null };
+  Reply: { profile: ConduitProfile | null };
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {
   instance.get<ProfileGeneric>('/:username', async (request, reply) => {
-    const [currentUser, followedUser] = await Promise.all([
-      getUserDb()
-        .select('user_id')
-        .where('token', request.headers.authorization?.replace('Bearer ', ''))
-        .first(),
-      getUserDb()
-        .select('bio', 'image', 'user_id', 'username')
-        .where('username', request.params.username)
-        .first()
-    ]);
+    const token = request.headers.authorization?.replace('Bearer ', '');
+    let currentUser: Awaited<ReturnType<typeof getUserByToken>> | undefined;
 
-    if (!followedUser) return reply.send({ profile: null });
+    if (token) {
+      currentUser = await getUserByToken(token);
+    }
 
-    const { user_id: followedUserId, ...restFollowedUser } = followedUser;
-    const followState = currentUser ? await getFollowersDb()
-      .where('following_id', followedUserId)
-      .andWhere('user_id', currentUser.user_id)
-      .first() : false;
+    const profile = await getProfileByUsername(
+      request.params.username,
+      currentUser?.user_id
+    );
 
-    return reply.send({
-      profile: { ...restFollowedUser, following: !!followState }
-    });
+    return reply.send({ profile: profile || null });
   });
 
   instance.post<ProfileGeneric>('/:username/follow', {
     handler: async (request, reply) => {
-      const [currentUser, followedUser] = await Promise.all([
-        getUserDb()
-          .select('user_id')
-          .where('token', request.headers.authorization?.replace('Bearer ', ''))
-          .first(),
-        getUserDb()
-          .select('bio', 'image', 'user_id', 'username')
-          .where('username', request.params.username)
-          .first()
-      ]);
+      const token = request.headers.authorization?.replace('Bearer ', '');
 
-      if (
-        !followedUser ||
-        !currentUser ||
-        // Prevent user from following themself
-        currentUser.user_id === followedUser.user_id
-      ) return reply.send({ profile: null });
+      if (!token) {
+        throw new Error('Invalid token');
+      }
 
-      await getFollowersDb().insert({
-        following_id: followedUser.user_id,
-        user_id: currentUser.user_id
-      });
+      const currentUser = await getUserByToken(token);
 
-      const { user_id, ...restFollowedUser } = followedUser;
+      if (!currentUser) {
+        return await reply.code(StatusCodes.UNAUTHORIZED).send({ profile: null });
+      }
 
-      await reply.send({ profile: { ...restFollowedUser, following: true } });
+      const profile = await followUser(
+        request.params.username,
+        currentUser.user_id
+      );
+
+      if (!profile) {
+        return await reply.code(StatusCodes.NOT_FOUND).send({ profile: null })
+      }
+
+      await reply.send({ profile });
     },
     onRequest: [instance.authenticate]
   });
 
   instance.delete<ProfileGeneric>('/:username/follow', {
     handler: async (request, reply) => {
-      const [currentUser, followedUser] = await Promise.all([
-        getUserDb()
-          .select('user_id')
-          .where('token', request.headers.authorization?.replace('Bearer ', ''))
-          .first(),
-        getUserDb()
-          .select('bio', 'image', 'user_id', 'username')
-          .where('username', request.params.username)
-          .first()
-      ]);
+      const token = request.headers.authorization?.replace('Bearer ', '');
 
-      if (!followedUser || !currentUser) return reply.send({ profile: null });
+      if (!token) {
+        return reply.code(StatusCodes.UNAUTHORIZED).send({ profile: null });
+      }
 
-      const { user_id, ...restFollowedUser } = followedUser;
+      const currentUser = await getUserByToken(token);
 
-      await getFollowersDb()
-        .where('following_id', user_id).andWhere('user_id', currentUser.user_id)
-        .delete();
+      if (!currentUser) {
+        return reply.code(StatusCodes.UNAUTHORIZED).send({ profile: null });
+      }
 
-      await reply.send({ profile: { ...restFollowedUser, following: false } });
+      const profile = await unfollowUser(request.params.username, currentUser.user_id);
+
+      if (!profile) {
+        return reply.code(StatusCodes.NOT_FOUND).send({ profile: null });
+      }
+
+      await reply.send({ profile });
     },
     onRequest: [instance.authenticate]
   });

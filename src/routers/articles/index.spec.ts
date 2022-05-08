@@ -1,9 +1,9 @@
 import fastify from 'fastify';
 import { StatusCodes } from 'http-status-codes';
-import { Article, getArticleDb, getTagsDb, getUserDb } from '../../data';
+import { getArticleDb, getTagsDb, getUserDb } from '../../data';
 import { router } from '.';
 
-const server = fastify({ logger: true });
+const server = fastify({ logger: { level: 'warn' } });
 
 server.decorate('authenticate', async (request: any) => {
   if (!request.headers.authorization) {

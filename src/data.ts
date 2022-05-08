@@ -46,7 +46,6 @@ export interface Follower {
   user_id: User['user_id'];
 }
 
-console.info(`Setting up database for '${process.env['NODE_ENV']}' environment`);
 export const db = knex(require('../knexfile.js')[process.env['NODE_ENV']]);
 
 export const getArticleDb = () => db<Article>('articles');
@@ -182,13 +181,13 @@ export const addComment = async (userId: number, articleSlug: string, body: stri
     id: comment.comment_id,
     updatedAt: new Date(comment.updated_at).toISOString()
   };
-}
+};
 
 export const getArticleComments = async (
   articleSlug: string,
   asUserId: number = 0
 ): Promise<Array<ConduitComment>> => {
-  const commentsQuery = getCommentsDb()
+  const comments = await getCommentsDb()
     .select(
       'bio',
       'body',
@@ -208,9 +207,6 @@ export const getArticleComments = async (
     })
     .where('article_slug', articleSlug);
 
-  const comments = await commentsQuery;
-  console.log(comments);
-
   return comments.map((comment) => ({
     author: {
       bio: comment.bio,
@@ -224,4 +220,67 @@ export const getArticleComments = async (
     id: comment.comment_id,
     updatedAt: new Date(comment.updated_at).toISOString()
   }));
+};
+
+export const getProfileByUsername = async (
+  username: string,
+  asUserId: number = 0
+): Promise<ConduitProfile | void> => {
+  const user = await getUserDb()
+    .select('bio', 'following_id', 'image', 'username')
+    .leftJoin('followers', (joinClause) => {
+      joinClause
+        .on('followers.following_id', '=', 'users.user_id')
+        // @ts-expect-error: number should be fine
+        .andOn('followers.user_id', '=', asUserId);
+    })
+    .where('username', username)
+    .first();
+
+  if (!user) return;
+
+  return {
+    bio: user.bio,
+    following: user.following_id ? true : false,
+    image: user.image,
+    username: user.username
+  };
+};
+
+export const followUser = async (
+  followingUsername: string,
+  followerUserId: number
+): Promise<ConduitProfile | void> => {
+  const newRow: Partial<Follower> = await getUserDb()
+    .select(
+      getUserDb().select('user_id').where('user_id', followerUserId).as('user_id'),
+      getUserDb().select('user_id').where('username', followingUsername).as('following_id')
+    )
+    .first();
+
+  if (!newRow.following_id || !newRow.user_id) {
+    return;
+  }
+
+  await getFollowersDb().insert(newRow);
+
+  const profile = await getProfileByUsername(followingUsername, followerUserId);
+
+  if (!profile) {
+    throw new Error('Could not refetch profile');
+  }
+
+  return profile;
+}
+
+export const unfollowUser = async (followingUsername: string, followerUserId: number): Promise<ConduitProfile | void> => {
+  await getFollowersDb()
+    .where('user_id', followerUserId)
+    .andWhere(
+      'following_id',
+      getUserDb().select('user_id').where('username', followingUsername)
+    )
+    .delete();
+
+  return await getProfileByUsername(followingUsername);
 }

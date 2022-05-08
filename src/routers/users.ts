@@ -2,7 +2,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 import { FromSchema } from 'json-schema-to-ts';
 import { encodePassword, validatePassword } from '../auth';
-import { User, getUserDb } from '../data';
+import { ConduitUser, getUserDb } from '../data';
 
 const LoginRequestBodySchema = {
   properties: {
@@ -19,11 +19,9 @@ const LoginRequestBodySchema = {
   type: 'object'
 } as const;
 
-type TokenizedUser = Omit<User, 'password' | 'user_id'>;
-
 interface LoginGeneric {
   Body: FromSchema<typeof LoginRequestBodySchema>;
-  Reply: { user: TokenizedUser | null };
+  Reply: { user: ConduitUser | null };
 }
 
 const getTokenizedUserByEmail = (email: string) =>
@@ -47,9 +45,7 @@ const CreateRequestBodySchema = {
 
 interface UsersPostGeneric {
   Body: FromSchema<typeof CreateRequestBodySchema>;
-  Reply: {
-    user: TokenizedUser | null;
-  };
+  Reply: { user: ConduitUser | null };
 }
 
 export const router: FastifyPluginCallback = (instance, options, done) => {

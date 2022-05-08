@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { getFollowersDb, getUserDb } from '../data';
 import { router } from './profiles';
 
-const server = fastify({ logger: true });
+const server = fastify({ logger: { level: 'warn' } });
 
 server.decorate('authenticate', async () => {});
 

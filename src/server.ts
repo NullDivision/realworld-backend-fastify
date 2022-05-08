@@ -1,4 +1,3 @@
-import { compare, genSalt, hash } from 'bcrypt';
 import fastify, {
   FastifyReply,
   FastifyRequest,
@@ -13,7 +12,7 @@ import { router as profilesRouter } from './routers/profiles';
 import { router as tagsRouter } from './routers/tags';
 
 export const server = fastify({
-  logger: true
+  logger: !!(process.env['NODE_ENV'] === 'test' ? { level: 'warn' } : true)
 });
 
 // It sucks every year, this is just the most recent
@@ -31,7 +30,6 @@ server.addHook('onRequest', (request, reply, done) => {
 // Format error messages and set 422 response code
 server.setErrorHandler(async (error, request, reply) => {
   if (error.validation) {
-    console.log(error.validation);
     await reply
       .code(StatusCodes.UNPROCESSABLE_ENTITY)
       .send({
