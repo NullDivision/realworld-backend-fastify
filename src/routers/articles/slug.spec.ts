@@ -132,7 +132,12 @@ describe('Article slug router', () => {
     expect(reply.statusCode).toBe(StatusCodes.CREATED);
     expect(reply.json()).toEqual({
       comment: {
-        author: testUser.username,
+        author: {
+          bio: null,
+          following: false,
+          image: null,
+          username: testUser['username']
+        },
         body: testPayload.comment.body,
         createdAt: expect.stringMatching(/^\d{4,}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d.\d+(?:[+-][0-2]\d:[0-5]\d|Z)$/),
         id: 1,

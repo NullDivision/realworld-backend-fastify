@@ -47,7 +47,12 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
           .first()
       ]);
 
-      if (!followedUser || !currentUser) return reply.send({ profile: null });
+      if (
+        !followedUser ||
+        !currentUser ||
+        // Prevent user from following themself
+        currentUser.user_id === followedUser.user_id
+      ) return reply.send({ profile: null });
 
       await getFollowersDb().insert({
         following_id: followedUser.user_id,

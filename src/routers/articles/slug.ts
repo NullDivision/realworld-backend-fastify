@@ -4,13 +4,17 @@ import { FromSchema } from 'json-schema-to-ts';
 import {
   Article,
   Comment,
+  ConduitComment,
   User,
+  addComment,
   getArticleBySlug,
   getArticleDb,
   getFavoritesDb,
   getUserDb,
   getCommentsDb,
-  getTagsDb
+  getTagsDb,
+  getUserByToken,
+  getArticleComments
 } from '../../data';
 
 type ReplyArticle =
@@ -56,8 +60,12 @@ const AddCommentSchema = {
   type: 'object'
 } as const;
 
+interface CommentAuthor extends Pick<User, 'bio' | 'image' | 'username'> {
+  following: boolean;
+}
+
 interface ReplyComment extends Pick<Comment, 'body'> {
-  author: User['username'];
+  author: CommentAuthor;
   createdAt: string;
   id: Comment['comment_id'];
   updatedAt: string;
@@ -65,7 +73,7 @@ interface ReplyComment extends Pick<Comment, 'body'> {
 
 interface AddCommentGeneric extends BaseSlugGeneric {
   Body: FromSchema<typeof AddCommentSchema>;
-  Reply: { comment: ReplyComment | null }
+  Reply: { comment: ConduitComment | null }
 }
 
 interface GetCommentsGeneric extends BaseSlugGeneric {
@@ -124,7 +132,8 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
 
       await reply.code(StatusCodes.OK).send({ article });
     },
-    onRequest: [instance.authenticate]
+    onRequest: [instance.authenticate],
+    schema: { body: UpdateArticleSchema }
   });
 
   instance.post<AgreementSlugGeneric>('/favorite', {
@@ -188,64 +197,32 @@ export const router: FastifyPluginCallback = (instance, options, done) => {
   });
 
   instance.post<AddCommentGeneric>('/comments', {
-    handler: async (request, reply) => {
-      const user = await getUserDb()
-          .select('user_id')
-          .where('token', request.headers.authorization?.replace('Bearer ', ''))
-          .first();
-
-      if (!user) {
-        await reply.code(StatusCodes.UNAUTHORIZED).send({ comment: null });
+    handler: async ({ body, headers: { authorization }, params }, reply) => {
+      if (!authorization) {
+        return await reply.code(StatusCodes.UNAUTHORIZED).send({ comment: null });
       }
 
-      const [insertId] = await getCommentsDb().insert({
-        article_slug: request.params.slug,
-        body: request.body.comment.body,
-        user_id: user?.user_id
-      });
+      const user = await getUserByToken(authorization.replace('Bearer ', ''));
 
-      const { created_at, updated_at, ...comment } = await getCommentsDb()
-        .select(
-          'username as author',
-          'body',
-          'created_at',
-          'comment_id as id',
-          'updated_at'
-        )
-        .join('users', 'users.user_id', 'comments.user_id')
-        .where({ comment_id: insertId })
-        .first();
+      if (!user) {
+        return await reply.code(StatusCodes.UNAUTHORIZED).send({ comment: null });
+      }
 
-      await reply.code(StatusCodes.CREATED).send({
-        comment: {
-          ...comment,
-          createdAt: new Date(created_at).toISOString(),
-          updatedAt: new Date(updated_at).toISOString()
-        } || null
-      });
+      const comment = await addComment(
+        user.user_id,
+        params.slug,
+        body.comment.body
+      );
+
+      await reply.code(StatusCodes.CREATED).send({ comment });
     },
     onRequest: [instance.authenticate],
     schema: { body: AddCommentSchema }
   });
 
   instance.get<GetCommentsGeneric>('/comments', async (request, reply) => {
-    const comments = await getCommentsDb()
-      .select(
-        'username as author',
-        'body',
-        'created_at',
-        'comment_id as id',
-        'updated_at'
-      )
-      .join('users', 'users.user_id', 'comments.user_id')
-      .where('article_slug', request.params.slug);
-
     await reply.code(StatusCodes.OK).send({
-      comments: comments.map(({ created_at, updated_at, ...comment }) => ({
-        ...comment,
-        createdAt: new Date(created_at).toISOString(),
-        updatedAt: new Date(updated_at).toISOString()
-      }))
+      comments: await getArticleComments(request.params.slug)
     });
   });
 

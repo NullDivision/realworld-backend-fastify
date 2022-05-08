@@ -56,6 +56,36 @@ export const getFavoritesDb = () => db<Favorites>('favorites');
 export const getCommentsDb = () => db<Comment>('comments');
 export const getFollowersDb = () => db<Follower>('followers');
 
+export type ConduitUser = Pick<User, 'bio' | 'email' | 'image' | 'token' | 'username'>;
+
+export interface ConduitProfile {
+  bio: User['bio'];
+  following: boolean;
+  image: User['image'];
+  username: User['username'];
+}
+
+export interface ConduitArticle {
+  author: ConduitProfile;
+  body: Article['body'];
+  createdAt: string;
+  description: Article['description'];
+  favorited: boolean;
+  favoritesCount: number;
+  slug: Article['slug'];
+  tagList: Array<string>;
+  title: Article['title'];
+  updatedAt: string;
+}
+
+export interface ConduitComment {
+  author: ConduitProfile;
+  body: Comment['body'];
+  createdAt: string;
+  id: Comment['comment_id'];
+  updatedAt: string;
+}
+
 type PublicArticle =
   & Pick<Article, 'body' | 'description' | 'slug' | 'title'>
   & {
@@ -66,15 +96,6 @@ type PublicArticle =
     tagList: string[];
     updatedAt: Article['updated_at'];
   };
-
-const PublicArticleKeys = [
-  'body',
-  'created_at',
-  'description',
-  'slug',
-  'title',
-  'updated_at'
-] as const;
 
 export const getArticleBySlug = async (
   slug: string,
@@ -126,3 +147,81 @@ export const getUserByToken = async (token: string) =>
     .select('user_id')
     .where('token', token)
     .first()
+
+export const addComment = async (userId: number, articleSlug: string, body: string): Promise<ConduitComment> => {
+  const [insertId] = await getCommentsDb().insert({
+    article_slug: articleSlug,
+    body: body,
+    user_id: userId
+  });
+
+  const comment = await getCommentsDb()
+    .select(
+      'bio',
+      'body',
+      'comment_id',
+      'created_at',
+      'image',
+      'updated_at',
+      'username'
+    )
+    .join('users', 'users.user_id', 'comments.user_id')
+    .where({ comment_id: insertId })
+    .first();
+
+  return {
+    author: {
+      bio: comment.bio,
+      // User can't follow themself so no point in figuring it out
+      following: false,
+      image: comment.image,
+      username: comment.username
+    },
+    body: comment.body,
+    createdAt: new Date(comment.created_at).toISOString(),
+    id: comment.comment_id,
+    updatedAt: new Date(comment.updated_at).toISOString()
+  };
+}
+
+export const getArticleComments = async (
+  articleSlug: string,
+  asUserId: number = 0
+): Promise<Array<ConduitComment>> => {
+  const commentsQuery = getCommentsDb()
+    .select(
+      'bio',
+      'body',
+      'created_at',
+      'comment_id',
+      'following_id',
+      'image',
+      'updated_at',
+      'username'
+    )
+    .join('users', 'users.user_id', 'comments.user_id')
+    .leftJoin('followers', (clause) => {
+      clause
+        .on('followers.following_id', '=', 'comments.user_id')
+        // @ts-expect-error: number should be fine
+        .andOn('followers.user_id', '=', asUserId);
+    })
+    .where('article_slug', articleSlug);
+
+  const comments = await commentsQuery;
+  console.log(comments);
+
+  return comments.map((comment) => ({
+    author: {
+      bio: comment.bio,
+      // following_id would be null on left join if user isn't followed
+      following: comment.following_id ? true : false,
+      image: comment.image,
+      username: comment.username
+    },
+    body: comment.body,
+    createdAt: new Date(comment.created_at).toISOString(),
+    id: comment.comment_id,
+    updatedAt: new Date(comment.updated_at).toISOString()
+  }));
+}

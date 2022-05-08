@@ -39,7 +39,7 @@ const PostArticleSchema = {
         tagList: { items: { type: 'string' }, type: 'array' },
         title: { type: 'string' }
       },
-      required: ['title'],
+      required: ['body', 'description', 'title'],
       type: 'object'
     }
   },

@@ -52,7 +52,7 @@ describe('Profile router', () => {
     const reply = await server.inject({
       headers: { authorization: `Bearer ${testUser.token}` },
       method: 'POST',
-      path: `/${testUser.username}/follow`
+      path: `/${testFollowedUser.username}/follow`
     });
 
     expect(reply.statusCode).toBe(StatusCodes.OK);
