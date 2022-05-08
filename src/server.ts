@@ -28,6 +28,22 @@ server.addHook('onRequest', (request, reply, done) => {
   done();
 });
 
+// Format error messages and set 422 response code
+server.setErrorHandler(async (error, request, reply) => {
+  if (error.validation) {
+    console.log(error.validation);
+    await reply
+      .code(StatusCodes.UNPROCESSABLE_ENTITY)
+      .send({
+        errors: {
+          // https://www.fastify.io/docs/latest/Reference/Validation-and-Serialization/#validator-compiler
+          // @ts-expect-error: validationContext exists
+          [error.validationContext]: error.validation.map(({ message }) => message)
+        }
+      });
+  }
+});
+
 server.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     await request.jwtVerify();

@@ -81,4 +81,26 @@ describe('Server', () => {
       });
     });
   });
+
+  it('formats response on validation failure', async () => {
+    await server.inject({
+      method: 'POST',
+      path: '/users',
+      payload: { user: testUser }
+    });
+
+    const loginReply = await server.inject({
+      method: 'POST',
+      path: '/users/login',
+      payload: { user: testUser }
+    });
+    const reply = await server.inject({
+      headers: { authorization: `Bearer ${loginReply.json().user.token}` },
+      method: 'POST',
+      path: '/articles'
+    });
+
+    expect(reply.statusCode).toBe(StatusCodes.UNPROCESSABLE_ENTITY);
+    expect(reply.json()).toEqual({ errors: { body: ['should be object'] } });
+  });
 });
